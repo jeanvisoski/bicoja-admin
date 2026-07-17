@@ -7,20 +7,29 @@ import { useAdminSession } from "@/lib/admin-session";
 
 type Provider = { profile_id: string; profiles: { full_name: string | null; email: string | null } | null };
 type Override = { provider_id: string; service_fee_pct: number; provider_profiles: Provider | null };
+type PaymentSettings = {
+  payment_mode: "homologacao" | "sandbox" | "producao";
+  payment_gateway: "mercado_pago";
+  pix_enabled: boolean;
+  card_enabled: boolean;
+};
 
 function useFeeSettings() {
   return useQuery({
     queryKey: ["admin-fee-settings"],
     queryFn: async () => {
-      const [{ data: setting, error: settingError }, { data: providers, error: providersError }, { data: overrides, error: overridesError }] = await Promise.all([
-        supabase.from("platform_settings").select("default_service_fee_pct, payment_mode, payment_gateway, pix_enabled, card_enabled").eq("id", true).single(),
+      const [{ data: setting, error: settingError }, paymentResult, { data: providers, error: providersError }, { data: overrides, error: overridesError }] = await Promise.all([
+        supabase.from("platform_settings").select("default_service_fee_pct").eq("id", true).single(),
+        supabase.from("platform_settings").select("payment_mode, payment_gateway, pix_enabled, card_enabled").eq("id", true).single<PaymentSettings>(),
         supabase.from("provider_profiles").select("profile_id, profiles(full_name, email)").order("member_since", { ascending: false }).returns<Provider[]>(),
         supabase.from("provider_fee_overrides").select("provider_id, service_fee_pct, provider_profiles(profile_id, profiles(full_name, email))").returns<Override[]>(),
       ]);
       if (settingError) throw settingError;
       if (providersError) throw providersError;
       if (overridesError) throw overridesError;
-      return { setting, providers: providers ?? [], overrides: overrides ?? [] };
+      const paymentSchemaPending = paymentResult.error?.code === "42703";
+      if (paymentResult.error && !paymentSchemaPending) throw paymentResult.error;
+      return { setting, paymentSettings: paymentResult.data, paymentSchemaPending, providers: providers ?? [], overrides: overrides ?? [] };
     },
   });
 }
@@ -37,9 +46,9 @@ export function Settings() {
   const [cardEnabled, setCardEnabled] = useState<boolean | null>(null);
 
   const displayedDefault = defaultFee || (data ? String(data.setting.default_service_fee_pct) : "");
-  const displayedPaymentMode = paymentMode || data?.setting.payment_mode || "homologacao";
-  const displayedPixEnabled = pixEnabled ?? data?.setting.pix_enabled ?? true;
-  const displayedCardEnabled = cardEnabled ?? data?.setting.card_enabled ?? true;
+  const displayedPaymentMode = paymentMode || data?.paymentSettings?.payment_mode || "homologacao";
+  const displayedPixEnabled = pixEnabled ?? data?.paymentSettings?.pix_enabled ?? true;
+  const displayedCardEnabled = cardEnabled ?? data?.paymentSettings?.card_enabled ?? true;
 
   async function saveDefault() {
     const fee = Number(displayedDefault);
@@ -108,11 +117,13 @@ export function Settings() {
         <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
           <h2 className="font-bold mb-1">Checkout e ambiente de pagamento</h2>
           <p className="text-xs text-muted-foreground mb-4">Mercado Pago e o gateway preparado para o MVP. As credenciais ficam protegidas no Supabase, nunca neste painel.</p>
+          {data.paymentSchemaPending ? <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">A configuracao de pagamento ainda nao foi criada no banco. Execute a migration <code>0033_payment_gateway_configuration.sql</code> no Supabase para habilitar este painel.</div> : <>
           <div className="grid md:grid-cols-3 gap-3">
             {(["homologacao", "sandbox", "producao"] as const).map((mode) => <label key={mode} className={`cursor-pointer rounded-xl border p-3 ${displayedPaymentMode === mode ? "border-primary bg-primary/5" : "border-border"}`}><input type="radio" name="payment-mode" value={mode} checked={displayedPaymentMode === mode} onChange={() => setPaymentMode(mode)} className="mr-2" /><span className="font-semibold text-sm">{mode === "homologacao" ? "Homologacao" : mode === "sandbox" ? "Sandbox" : "Producao"}</span><p className="text-[11px] text-muted-foreground mt-1">{mode === "homologacao" ? "Aprova o pagamento simulado no app." : mode === "sandbox" ? "Usa contas e pagamentos de teste." : "Cobra pagamentos reais."}</p></label>)}
           </div>
           <div className="flex flex-wrap gap-5 mt-5 text-sm"><label className="flex items-center gap-2"><input type="checkbox" checked={displayedPixEnabled} onChange={(e) => setPixEnabled(e.target.checked)} /> Pix habilitado</label><label className="flex items-center gap-2"><input type="checkbox" checked={displayedCardEnabled} onChange={(e) => setCardEnabled(e.target.checked)} /> Cartao habilitado</label></div>
           <button onClick={savePaymentSettings} className="mt-5 h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-2"><Save className="h-4 w-4" />Salvar configuracao de pagamento</button>
+          </>}
         </section>
         <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
           <h2 className="font-bold mb-1">Taxa por prestador</h2>
