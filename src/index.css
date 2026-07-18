@@ -90,7 +90,15 @@
     color: var(--color-foreground);
     font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
+}
+
+@media (max-width: 767px) {
+  main .p-8 { padding: 1rem; }
+  main table { min-width: 680px; }
+  main .overflow-hidden:has(table) { overflow-x: auto; }
+  main .grid-cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @utility bg-hero {

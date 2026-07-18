@@ -9,6 +9,10 @@ import { AdminSessionProvider } from "./lib/admin-session";
 
 const queryClient = new QueryClient();
 
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => undefined));
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
