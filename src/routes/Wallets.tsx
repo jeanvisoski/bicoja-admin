@@ -8,7 +8,7 @@ type WalletRow = {
   provider_id: string;
   type: string;
   amount: number;
-  status: "pendente" | "disponivel" | "pago";
+  status: "pendente" | "em_garantia" | "disponivel" | "reservado" | "pago" | "congelado" | "reembolsado";
   available_at: string | null;
   created_at: string;
   profiles: { full_name: string | null } | null;
@@ -108,7 +108,7 @@ export function Wallets() {
       <h1 className="text-2xl font-extrabold tracking-tight">Carteira e repasses</h1>
       <p className="text-sm text-muted-foreground mt-1 mb-6">Libere valores pendentes e registre pagamentos aos prestadores.</p>
       <div className="grid grid-cols-3 gap-3 mb-6">
-        <Stat label="A liberar" value={totals.pendente ?? 0} tint="bg-amber-100 text-amber-700" />
+        <Stat label="Em garantia" value={(totals.pendente ?? 0) + (totals.em_garantia ?? 0) + (totals.congelado ?? 0)} tint="bg-amber-100 text-amber-700" />
         <Stat label="Disponível" value={totals.disponivel ?? 0} tint="bg-emerald-100 text-emerald-700" />
         <Stat label="Pago" value={totals.pago ?? 0} tint="bg-slate-100 text-slate-700" />
       </div>
@@ -119,7 +119,7 @@ export function Wallets() {
       <div className="bg-card border border-border rounded-2xl overflow-hidden divide-y divide-border">
         {transactions.map((row) => (
           <div key={row.id} className="p-4 flex items-center gap-4">
-            <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${row.status === "pendente" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{row.status === "pendente" ? <Clock3 className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}</div>
+            <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${["pendente", "em_garantia", "congelado"].includes(row.status) ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{["pendente", "em_garantia", "congelado"].includes(row.status) ? <Clock3 className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}</div>
             <div className="flex-1"><p className="font-semibold text-sm">{row.profiles?.full_name ?? "Prestador"}</p><p className="text-xs text-muted-foreground">Pedido #{row.orders?.id.slice(0, 8) ?? "—"} · {row.type}</p></div>
             <p className="font-bold">R$ {Number(row.amount).toFixed(2)}</p>
             {row.status === "pendente" && <button onClick={() => setStatus(row, "disponivel")} className="h-9 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold">Liberar</button>}

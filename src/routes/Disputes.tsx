@@ -48,18 +48,13 @@ export function Disputes() {
   const { data: disputes = [], isLoading } = useDisputes();
   const queryClient = useQueryClient();
 
-  async function resolve(orderId: string, outcome: "concluido" | "cancelado", note: string) {
-    const { error } = await supabase.from("orders").update({ status: outcome }).eq("id", orderId);
-    await supabase.from("order_status_events").insert({
-      order_id: orderId,
-      status: outcome,
-      note: `[Admin] ${note}`,
-    });
+  async function resolve(orderId: string, outcome: "liberar" | "reembolso_total", note: string) {
+    const { error } = await supabase.rpc("resolve_protection_dispute", { p_order_id: orderId, p_resolution: outcome, p_refund_amount: 0, p_note: note });
     if (error) {
       toast.error(error.message);
       return;
     }
-    toast.success("Disputa resolvida.");
+    toast.success("Disputa resolvida e carteira atualizada.");
     queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   }
@@ -107,7 +102,7 @@ export function Disputes() {
                 onClick={() =>
                   resolve(
                     d.id,
-                    "concluido",
+                    "liberar",
                     `Mediado por ${session?.user.email} — resolvido a favor da conclusão do serviço.`,
                   )
                 }
@@ -119,13 +114,13 @@ export function Disputes() {
                 onClick={() =>
                   resolve(
                     d.id,
-                    "cancelado",
-                    `Mediado por ${session?.user.email} — pedido cancelado.`,
+                    "reembolso_total",
+                    `Mediado por ${session?.user.email} — reembolso integral solicitado.`,
                   )
                 }
                 className="h-9 px-4 rounded-lg bg-destructive text-destructive-foreground text-xs font-semibold"
               >
-                Cancelar pedido
+                Reembolso integral
               </button>
             </div>
           </div>
