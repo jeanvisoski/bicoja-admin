@@ -1,9 +1,11 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -42,41 +44,41 @@
 
 :root {
   --radius: 1rem;
-  --background: oklch(0.99 0.005 240);
-  --foreground: oklch(0.18 0.03 260);
+  --background: oklch(0.965 0.010 87.5);
+  --foreground: oklch(0.179 0.005 145.4);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.03 260);
+  --card-foreground: oklch(0.179 0.005 145.4);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.03 260);
-  --primary: oklch(0.32 0.14 265);
-  --primary-foreground: oklch(0.99 0.005 240);
-  --secondary: oklch(0.96 0.01 260);
-  --secondary-foreground: oklch(0.22 0.04 265);
-  --muted: oklch(0.96 0.01 260);
-  --muted-foreground: oklch(0.5 0.02 260);
-  --accent: oklch(0.72 0.16 155);
-  --accent-foreground: oklch(0.15 0.05 155);
-  --destructive: oklch(0.6 0.22 25);
-  --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.92 0.01 260);
-  --input: oklch(0.94 0.01 260);
-  --ring: oklch(0.32 0.14 265);
-  --trust: oklch(0.62 0.15 160);
-  --trust-soft: oklch(0.94 0.05 160);
-  --warn: oklch(0.78 0.14 75);
-  --gradient-hero: linear-gradient(135deg, oklch(0.32 0.14 265), oklch(0.42 0.18 285));
+  --popover-foreground: oklch(0.179 0.005 145.4);
+  --primary: oklch(0.374 0.068 168.5);
+  --primary-foreground: oklch(0.965 0.010 87.5);
+  --secondary: oklch(0.94 0.018 125);
+  --secondary-foreground: oklch(0.28 0.04 160);
+  --muted: oklch(0.94 0.012 90);
+  --muted-foreground: oklch(0.49 0.01 145);
+  --accent: oklch(0.89 0.06 155);
+  --accent-foreground: oklch(0.25 0.05 165);
+  --destructive: oklch(0.522 0.158 31.0);
+  --destructive-foreground: oklch(0.965 0.010 87.5);
+  --border: oklch(0.86 0.01 90);
+  --input: oklch(0.92 0.01 90);
+  --ring: oklch(0.374 0.068 168.5);
+  --trust: oklch(0.374 0.068 168.5);
+  --trust-soft: oklch(0.94 0.04 155);
+  --warn: oklch(0.605 0.109 72.7);
+  --gradient-hero: var(--primary);
   --shadow-card:
     0 1px 2px oklch(0.2 0.05 265 / 0.04), 0 8px 24px oklch(0.2 0.05 265 / 0.06);
   --shadow-float:
     0 4px 12px oklch(0.2 0.05 265 / 0.08), 0 24px 48px oklch(0.2 0.05 265 / 0.12);
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
+  --sidebar: oklch(0.965 0.010 87.5);
+  --sidebar-foreground: oklch(0.179 0.005 145.4);
+  --sidebar-primary: oklch(0.374 0.068 168.5);
+  --sidebar-primary-foreground: oklch(0.965 0.010 87.5);
+  --sidebar-accent: oklch(0.94 0.018 125);
+  --sidebar-accent-foreground: oklch(0.28 0.04 160);
+  --sidebar-border: oklch(0.86 0.01 90);
+  --sidebar-ring: oklch(0.374 0.068 168.5);
 }
 
 @layer base {
@@ -88,11 +90,13 @@
     margin: 0;
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
   }
 }
+
+[class*="font-[Manrope]"] { font-family: var(--font-display) !important; }
 
 @media (max-width: 767px) {
   main .p-8 { padding: 1rem; }

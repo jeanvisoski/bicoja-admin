@@ -75,10 +75,8 @@ export function Layout() {
     <div className="min-h-screen flex">
       <aside className="hidden md:flex w-60 shrink-0 border-r border-border bg-card flex-col p-4">
         <div className="flex items-center gap-2 px-2 mb-8">
-          <div className="h-9 w-9 rounded-xl bg-hero flex items-center justify-center">
-            <ShieldCheck className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <span className="font-extrabold tracking-tight">BicoJá Admin</span>
+          <img src="/bicoja-mark.svg" alt="bicojá" className="h-9 w-9 object-contain" />
+          <span className="font-display font-medium tracking-[-0.03em]">bicojá admin</span>
         </div>
         <nav className="flex-1 space-y-1">
           {NAV.map((item) => {
@@ -104,7 +102,7 @@ export function Layout() {
       </aside>
       <div className="md:hidden fixed inset-x-0 top-0 z-40 border-b border-border bg-card/95 backdrop-blur shadow-card">
         <div className="h-14 px-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0"><img src="/bicoja-mark.png" alt="" className="h-8 w-8 object-contain" /><span className="font-extrabold tracking-tight truncate">BICOJÁ Admin</span></div>
+          <div className="flex items-center gap-2 min-w-0"><img src="/bicoja-mark.svg" alt="bicojá" className="h-8 w-8 object-contain" /><span className="font-display font-medium tracking-[-0.03em] truncate">bicojá admin</span></div>
           <InstallAdminApp />
         </div>
         <nav className="flex gap-1 overflow-x-auto px-3 pb-2 scrollbar-none">
