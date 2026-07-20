@@ -54,7 +54,12 @@ export function Disputes() {
       toast.error(error.message);
       return;
     }
-    toast.success("Disputa resolvida e carteira atualizada.");
+    await supabase.rpc("record_operational_audit", { p_entity_type: "order", p_entity_id: orderId, p_action: `dispute_${outcome}`, p_details: { note } });
+    if (outcome === "reembolso_total") {
+      const { error: refundError } = await supabase.functions.invoke("mercadopago-refund", { body: { orderId } });
+      if (refundError) toast.error(`Disputa resolvida; reembolso ficou pendente: ${refundError.message}`);
+      else toast.success("Disputa resolvida e reembolso processado.");
+    } else toast.success("Disputa resolvida e carteira atualizada.");
     queryClient.invalidateQueries({ queryKey: ["admin-disputes"] });
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   }

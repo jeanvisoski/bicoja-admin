@@ -62,6 +62,7 @@ export function Providers() {
       toast.error(error.message);
       return;
     }
+    await supabase.rpc("record_operational_audit", { p_entity_type: "provider", p_entity_id: profileId, p_action: `verification_${status}`, p_details: {} });
     toast.success("Status atualizado.");
     queryClient.invalidateQueries({ queryKey: ["admin-providers"] });
   }
