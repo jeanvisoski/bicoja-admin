@@ -12,6 +12,7 @@ import {
   WalletCards,
   Settings,
   ShieldAlert,
+  MessageSquareText,
   Download,
 } from "lucide-react";
 import { useAdminSession } from "@/lib/admin-session";
@@ -28,6 +29,7 @@ const NAV = [
   { to: "/wallets", label: "Carteira", icon: WalletCards },
   { to: "/settings", label: "Configurações", icon: Settings },
   { to: "/trust-reports", label: "Proteção", icon: ShieldAlert },
+  { to: "/support", label: "Suporte", icon: MessageSquareText },
 ] as const;
 
 type InstallPromptEvent = Event & {

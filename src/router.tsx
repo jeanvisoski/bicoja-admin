@@ -11,6 +11,7 @@ import { Wallets } from "./routes/Wallets";
 import { Requests } from "./routes/Requests";
 import { Settings } from "./routes/Settings";
 import { TrustReports } from "./routes/TrustReports";
+import { Support } from "./routes/Support";
 
 const rootRoute = createRootRoute({ component: () => <Outlet /> });
 
@@ -85,6 +86,7 @@ const trustReportsRoute = createRoute({
   path: "/trust-reports",
   component: TrustReports,
 });
+const supportRoute = createRoute({ getParentRoute: () => layoutRoute, path: "/support", component: Support });
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
@@ -99,6 +101,7 @@ const routeTree = rootRoute.addChildren([
     walletsRoute,
     settingsRoute,
     trustReportsRoute,
+    supportRoute,
   ]),
 ]);
 
