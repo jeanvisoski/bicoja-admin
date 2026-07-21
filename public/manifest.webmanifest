@@ -1,12 +1,12 @@
 {
-  "name": "BICOJÁ Admin",
-  "short_name": "BICOJÁ Admin",
+  "name": "bicojá admin",
+  "short_name": "bicojá admin",
   "description": "Painel operacional da BICOJÁ.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F6F3EC",
   "theme_color": "#0F4C3A",
   "icons": [
-    { "src": "/bicoja-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "/bicoja-mark.svg?v=3", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ]
 }

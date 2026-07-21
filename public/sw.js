@@ -1,5 +1,5 @@
-const CACHE = "bicoja-admin-v2";
-const ASSETS = ["/", "/manifest.webmanifest", "/bicoja-mark.svg"];
+const CACHE = "bicoja-admin-v3";
+const ASSETS = ["/", "/manifest.webmanifest", "/bicoja-mark.svg?v=3"];
 self.addEventListener("install", (event) => event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS))));
 self.addEventListener("activate", (event) => event.waitUntil(
   caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
