@@ -70,7 +70,7 @@ export function Layout() {
   }
 
   if (loading || !session || !isAdmin) {
-    return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Carregando...</div>;
+    return <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background"><img src="/bicoja-mark.svg" alt="bicojá" className="h-20 w-20 animate-pulse" /><span className="font-display text-sm text-muted-foreground">carregando bicojá admin</span></div>;
   }
 
   return (
