@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Percent, Save, Trash2 } from "lucide-react";
+import { Percent, Save, Trash2, Store } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAdminSession } from "@/lib/admin-session";
 
@@ -17,14 +17,16 @@ type PaymentSettings = {
   provider_guarantee_days: number;
   auto_completion_hours: number;
 };
+type SiteDistributionSettings = { app_store_url: string | null; google_play_url: string | null };
 
 function useFeeSettings() {
   return useQuery({
     queryKey: ["admin-fee-settings"],
     queryFn: async () => {
-      const [{ data: setting, error: settingError }, paymentResult, { data: providers, error: providersError }, { data: overrides, error: overridesError }] = await Promise.all([
+      const [{ data: setting, error: settingError }, paymentResult, siteResult, { data: providers, error: providersError }, { data: overrides, error: overridesError }] = await Promise.all([
         supabase.from("platform_settings").select("default_service_fee_pct, customer_protection_fee_pct, customer_protection_fee_min, provider_guarantee_days, auto_completion_hours").eq("id", true).single(),
         supabase.from("platform_settings").select("payment_mode, payment_gateway, pix_enabled, card_enabled").eq("id", true).single<PaymentSettings>(),
+        supabase.from("platform_settings").select("app_store_url, google_play_url").eq("id", true).single<SiteDistributionSettings>(),
         supabase.from("provider_profiles").select("profile_id, profiles(full_name, email)").order("member_since", { ascending: false }).returns<Provider[]>(),
         supabase.from("provider_fee_overrides").select("provider_id, service_fee_pct, provider_profiles(profile_id, profiles(full_name, email))").returns<Override[]>(),
       ]);
@@ -32,8 +34,10 @@ function useFeeSettings() {
       if (providersError) throw providersError;
       if (overridesError) throw overridesError;
       const paymentSchemaPending = paymentResult.error?.code === "42703";
+      const siteSchemaPending = siteResult.error?.code === "42703";
       if (paymentResult.error && !paymentSchemaPending) throw paymentResult.error;
-      return { setting, paymentSettings: paymentResult.data, paymentSchemaPending, providers: providers ?? [], overrides: overrides ?? [] };
+      if (siteResult.error && !siteSchemaPending) throw siteResult.error;
+      return { setting, paymentSettings: paymentResult.data, paymentSchemaPending, siteSettings: siteResult.data, siteSchemaPending, providers: providers ?? [], overrides: overrides ?? [] };
     },
   });
 }
@@ -52,6 +56,8 @@ export function Settings() {
   const [protectionMin, setProtectionMin] = useState("");
   const [guaranteeDays, setGuaranteeDays] = useState("");
   const [completionHours, setCompletionHours] = useState("");
+  const [appStoreUrl, setAppStoreUrl] = useState("");
+  const [googlePlayUrl, setGooglePlayUrl] = useState("");
 
   const displayedDefault = defaultFee || (data ? String(data.setting.default_service_fee_pct) : "");
   const displayedPaymentMode = paymentMode || data?.paymentSettings?.payment_mode || "homologacao";
@@ -61,6 +67,24 @@ export function Settings() {
   const displayedProtectionMin = protectionMin || (data ? String(data.setting.customer_protection_fee_min ?? 0) : "");
   const displayedGuaranteeDays = guaranteeDays || (data ? String(data.setting.provider_guarantee_days ?? 7) : "7");
   const displayedCompletionHours = completionHours || (data ? String(data.setting.auto_completion_hours ?? 48) : "48");
+  const displayedAppStoreUrl = appStoreUrl || data?.siteSettings?.app_store_url || "";
+  const displayedGooglePlayUrl = googlePlayUrl || data?.siteSettings?.google_play_url || "";
+
+  async function saveStoreLinks() {
+    if (data?.siteSchemaPending) return toast.error("Execute a migration 0045_site_distribution_settings.sql no Supabase antes de salvar os links.");
+    const isValidUrl = (value: string) => !value || /^https:\/\/[^\s]+$/i.test(value);
+    if (!isValidUrl(displayedAppStoreUrl) || !isValidUrl(displayedGooglePlayUrl)) return toast.error("Use links completos iniciando com https://.");
+    const { error } = await supabase.from("platform_settings").update({
+      app_store_url: displayedAppStoreUrl.trim() || null,
+      google_play_url: displayedGooglePlayUrl.trim() || null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", true);
+    if (error) return toast.error(error.message);
+    setAppStoreUrl("");
+    setGooglePlayUrl("");
+    toast.success("Links das lojas atualizados no site.");
+    queryClient.invalidateQueries({ queryKey: ["admin-fee-settings"] });
+  }
 
   async function saveProtectionSettings() {
     const fee = Number(displayedProtectionFee); const min = Number(displayedProtectionMin); const days = Number(displayedGuaranteeDays); const hours = Number(displayedCompletionHours);
@@ -134,6 +158,17 @@ export function Settings() {
           <div className="flex items-center gap-2 mb-2"><Percent className="h-5 w-5 text-primary" /><h2 className="font-bold">Taxa padrão da plataforma</h2></div>
           <p className="text-xs text-muted-foreground mb-4">Aplicada a todo novo pedido quando o prestador não possuir uma taxa personalizada.</p>
           <div className="flex max-w-sm gap-2"><input value={displayedDefault} onChange={(e) => setDefaultFee(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" className="h-11 flex-1 rounded-xl border border-border bg-background px-3" /><span className="h-11 flex items-center text-sm font-semibold">%</span><button onClick={saveDefault} className="h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-2"><Save className="h-4 w-4" />Salvar</button></div>
+        </section>
+        <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
+          <div className="flex items-center gap-2 mb-1"><Store className="h-5 w-5 text-primary" /><h2 className="font-bold">Links para baixar o app</h2></div>
+          <p className="text-xs text-muted-foreground mb-4">O site institucional libera cada botão automaticamente apenas quando o respectivo link for informado.</p>
+          {data.siteSchemaPending ? <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">Execute a migration <code>0045_site_distribution_settings.sql</code> no Supabase para habilitar esta configuração.</div> : <>
+            <div className="grid md:grid-cols-2 gap-3">
+              <label className="text-xs font-semibold">Apple App Store<input value={displayedAppStoreUrl} onChange={(e) => setAppStoreUrl(e.target.value)} type="url" placeholder="https://apps.apple.com/..." className="mt-1 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm" /></label>
+              <label className="text-xs font-semibold">Google Play<input value={displayedGooglePlayUrl} onChange={(e) => setGooglePlayUrl(e.target.value)} type="url" placeholder="https://play.google.com/..." className="mt-1 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm" /></label>
+            </div>
+            <button onClick={saveStoreLinks} className="mt-4 h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-2"><Save className="h-4 w-4" />Salvar links das lojas</button>
+          </>}
         </section>
         <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
           <h2 className="font-bold mb-1">Protecao do cliente e garantia</h2>

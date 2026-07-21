@@ -12,6 +12,7 @@ import { Requests } from "./routes/Requests";
 import { Settings } from "./routes/Settings";
 import { TrustReports } from "./routes/TrustReports";
 import { Support } from "./routes/Support";
+import { Waitlist } from "./routes/Waitlist";
 
 const rootRoute = createRootRoute({ component: () => <Outlet /> });
 
@@ -87,6 +88,7 @@ const trustReportsRoute = createRoute({
   component: TrustReports,
 });
 const supportRoute = createRoute({ getParentRoute: () => layoutRoute, path: "/support", component: Support });
+const waitlistRoute = createRoute({ getParentRoute: () => layoutRoute, path: "/waitlist", component: Waitlist });
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
@@ -102,6 +104,7 @@ const routeTree = rootRoute.addChildren([
     settingsRoute,
     trustReportsRoute,
     supportRoute,
+    waitlistRoute,
   ]),
 ]);
 

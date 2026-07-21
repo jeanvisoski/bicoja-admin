@@ -14,6 +14,7 @@ import {
   ShieldAlert,
   MessageSquareText,
   Download,
+  Mail,
 } from "lucide-react";
 import { useAdminSession } from "@/lib/admin-session";
 import { supabase } from "@/lib/supabase";
@@ -30,6 +31,7 @@ const NAV = [
   { to: "/settings", label: "Configurações", icon: Settings },
   { to: "/trust-reports", label: "Proteção", icon: ShieldAlert },
   { to: "/support", label: "Suporte", icon: MessageSquareText },
+  { to: "/waitlist", label: "Lista de espera", icon: Mail },
 ] as const;
 
 type InstallPromptEvent = Event & {
