@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Percent, Save, Trash2, Store } from "lucide-react";
+import { MapPinned, Percent, Save, Trash2, Store } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAdminSession } from "@/lib/admin-session";
 
@@ -18,15 +18,21 @@ type PaymentSettings = {
   auto_completion_hours: number;
 };
 type SiteDistributionSettings = { app_store_url: string | null; google_play_url: string | null };
+type LaunchRegion = { city: string; state: string };
+type LaunchRegionSettings = {
+  launch_regions_enabled: boolean;
+  active_service_regions: LaunchRegion[];
+};
 
 function useFeeSettings() {
   return useQuery({
     queryKey: ["admin-fee-settings"],
     queryFn: async () => {
-      const [{ data: setting, error: settingError }, paymentResult, siteResult, { data: providers, error: providersError }, { data: overrides, error: overridesError }] = await Promise.all([
+      const [{ data: setting, error: settingError }, paymentResult, siteResult, launchRegionResult, { data: providers, error: providersError }, { data: overrides, error: overridesError }] = await Promise.all([
         supabase.from("platform_settings").select("default_service_fee_pct, customer_protection_fee_pct, customer_protection_fee_min, provider_guarantee_days, auto_completion_hours").eq("id", true).single(),
         supabase.from("platform_settings").select("payment_mode, payment_gateway, pix_enabled, card_enabled").eq("id", true).single<PaymentSettings>(),
         supabase.from("platform_settings").select("app_store_url, google_play_url").eq("id", true).single<SiteDistributionSettings>(),
+        supabase.from("platform_settings").select("launch_regions_enabled, active_service_regions").eq("id", true).single<LaunchRegionSettings>(),
         supabase.from("provider_profiles").select("profile_id, profiles(full_name, email)").order("member_since", { ascending: false }).returns<Provider[]>(),
         supabase.from("provider_fee_overrides").select("provider_id, service_fee_pct, provider_profiles(profile_id, profiles(full_name, email))").returns<Override[]>(),
       ]);
@@ -35,9 +41,11 @@ function useFeeSettings() {
       if (overridesError) throw overridesError;
       const paymentSchemaPending = paymentResult.error?.code === "42703";
       const siteSchemaPending = siteResult.error?.code === "42703";
+      const launchRegionSchemaPending = launchRegionResult.error?.code === "42703";
       if (paymentResult.error && !paymentSchemaPending) throw paymentResult.error;
       if (siteResult.error && !siteSchemaPending) throw siteResult.error;
-      return { setting, paymentSettings: paymentResult.data, paymentSchemaPending, siteSettings: siteResult.data, siteSchemaPending, providers: providers ?? [], overrides: overrides ?? [] };
+      if (launchRegionResult.error && !launchRegionSchemaPending) throw launchRegionResult.error;
+      return { setting, paymentSettings: paymentResult.data, paymentSchemaPending, siteSettings: siteResult.data, siteSchemaPending, launchRegionSettings: launchRegionResult.data, launchRegionSchemaPending, providers: providers ?? [], overrides: overrides ?? [] };
     },
   });
 }
@@ -58,6 +66,8 @@ export function Settings() {
   const [completionHours, setCompletionHours] = useState("");
   const [appStoreUrl, setAppStoreUrl] = useState("");
   const [googlePlayUrl, setGooglePlayUrl] = useState("");
+  const [launchRegionsEnabled, setLaunchRegionsEnabled] = useState<boolean | null>(null);
+  const [launchRegionsText, setLaunchRegionsText] = useState("");
 
   const displayedDefault = defaultFee || (data ? String(data.setting.default_service_fee_pct) : "");
   const displayedPaymentMode = paymentMode || data?.paymentSettings?.payment_mode || "homologacao";
@@ -69,6 +79,30 @@ export function Settings() {
   const displayedCompletionHours = completionHours || (data ? String(data.setting.auto_completion_hours ?? 48) : "48");
   const displayedAppStoreUrl = appStoreUrl || data?.siteSettings?.app_store_url || "";
   const displayedGooglePlayUrl = googlePlayUrl || data?.siteSettings?.google_play_url || "";
+  const displayedLaunchRegionsEnabled = launchRegionsEnabled ?? data?.launchRegionSettings?.launch_regions_enabled ?? false;
+  const displayedLaunchRegionsText = launchRegionsText || (data?.launchRegionSettings?.active_service_regions ?? []).map((region) => `${region.city}, ${region.state}`).join("\n");
+
+  async function saveLaunchRegions() {
+    if (data?.launchRegionSchemaPending) return toast.error("Execute a migration 0047_launch_regions.sql no Supabase antes de ativar regiões.");
+    const lines = displayedLaunchRegionsText.split("\n").map((value) => value.trim()).filter(Boolean);
+    const regions: LaunchRegion[] = [];
+    for (const line of lines) {
+      const [city, state, ...rest] = line.split(",").map((value) => value.trim());
+      if (!city || !state || rest.length || state.length !== 2) return toast.error("Use uma cidade por linha no formato: Erechim, RS.");
+      regions.push({ city, state: state.toUpperCase() });
+    }
+    if (displayedLaunchRegionsEnabled && regions.length === 0) return toast.error("Cadastre ao menos uma cidade antes de ativar o bloqueio regional.");
+    const { error } = await supabase.from("platform_settings").update({
+      launch_regions_enabled: displayedLaunchRegionsEnabled,
+      active_service_regions: regions,
+      updated_at: new Date().toISOString(),
+    }).eq("id", true);
+    if (error) return toast.error(error.message);
+    setLaunchRegionsEnabled(null);
+    setLaunchRegionsText("");
+    toast.success(displayedLaunchRegionsEnabled ? "Regiões de lançamento atualizadas." : "Atendimento liberado para todas as regiões.");
+    queryClient.invalidateQueries({ queryKey: ["admin-fee-settings"] });
+  }
 
   async function saveStoreLinks() {
     if (data?.siteSchemaPending) return toast.error("Execute a migration 0045_site_distribution_settings.sql no Supabase antes de salvar os links.");
@@ -158,6 +192,16 @@ export function Settings() {
           <div className="flex items-center gap-2 mb-2"><Percent className="h-5 w-5 text-primary" /><h2 className="font-bold">Taxa padrão da plataforma</h2></div>
           <p className="text-xs text-muted-foreground mb-4">Aplicada a todo novo pedido quando o prestador não possuir uma taxa personalizada.</p>
           <div className="flex max-w-sm gap-2"><input value={displayedDefault} onChange={(e) => setDefaultFee(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" className="h-11 flex-1 rounded-xl border border-border bg-background px-3" /><span className="h-11 flex items-center text-sm font-semibold">%</span><button onClick={saveDefault} className="h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-2"><Save className="h-4 w-4" />Salvar</button></div>
+        </section>
+        <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
+          <div className="flex items-center gap-2 mb-1"><MapPinned className="h-5 w-5 text-primary" /><h2 className="font-bold">Regiões de lançamento</h2></div>
+          <p className="text-xs text-muted-foreground mb-4">Use este controle para concentrar oferta e demanda em uma cidade-piloto. Quando ativo, o banco bloqueia novos pedidos fora das cidades configuradas.</p>
+          {data.launchRegionSchemaPending ? <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">Execute a migration <code>0047_launch_regions.sql</code> no Supabase para habilitar este controle.</div> : <>
+            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={displayedLaunchRegionsEnabled} onChange={(event) => setLaunchRegionsEnabled(event.target.checked)} /> Restringir atendimento às cidades abaixo</label>
+            <label className="mt-4 block text-xs font-semibold">Cidades ativas<textarea value={displayedLaunchRegionsText} onChange={(event) => setLaunchRegionsText(event.target.value)} placeholder={"Erechim, RS\nPasso Fundo, RS"} rows={4} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" /></label>
+            <p className="mt-2 text-[11px] text-muted-foreground">Uma por linha, sempre no formato <strong>Cidade, UF</strong>. Deixe o bloqueio desligado para permitir pedidos em qualquer região.</p>
+            <button onClick={saveLaunchRegions} className="mt-4 h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-2"><Save className="h-4 w-4" />Salvar regiões</button>
+          </>}
         </section>
         <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
           <div className="flex items-center gap-2 mb-1"><Store className="h-5 w-5 text-primary" /><h2 className="font-bold">Links para baixar o app</h2></div>
