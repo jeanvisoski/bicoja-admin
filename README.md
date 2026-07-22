@@ -1,7 +1,7 @@
 # BicoJá Admin
 
 Portal administrativo do BicoJá (aprovar prestadores, ver todos os pedidos, mediar disputas).
-Mesmo projeto Supabase do app principal (`confia-secure-home`) — nenhum backend próprio.
+Mesmo projeto Supabase do app principal (`bicoja-home`) — nenhum backend próprio.
 
 ## Rodar localmente
 

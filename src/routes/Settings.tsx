@@ -54,7 +54,6 @@ export function Settings() {
   const { session } = useAdminSession();
   const { data, isLoading } = useFeeSettings();
   const queryClient = useQueryClient();
-  const [defaultFee, setDefaultFee] = useState("");
   const [providerId, setProviderId] = useState("");
   const [providerFee, setProviderFee] = useState("");
   const [paymentMode, setPaymentMode] = useState<"homologacao" | "sandbox" | "producao" | "">("");
@@ -69,7 +68,6 @@ export function Settings() {
   const [launchRegionsEnabled, setLaunchRegionsEnabled] = useState<boolean | null>(null);
   const [launchRegionsText, setLaunchRegionsText] = useState("");
 
-  const displayedDefault = defaultFee || (data ? String(data.setting.default_service_fee_pct) : "");
   const displayedPaymentMode = paymentMode || data?.paymentSettings?.payment_mode || "homologacao";
   const displayedPixEnabled = pixEnabled ?? data?.paymentSettings?.pix_enabled ?? true;
   const displayedCardEnabled = cardEnabled ?? data?.paymentSettings?.card_enabled ?? true;
@@ -129,19 +127,6 @@ export function Settings() {
     toast.success("Protecao ao cliente atualizada."); queryClient.invalidateQueries({ queryKey: ["admin-fee-settings"] });
   }
 
-  async function saveDefault() {
-    const fee = Number(displayedDefault);
-    if (Number.isNaN(fee) || fee < 0 || fee > 100) return toast.error("Informe uma taxa entre 0 e 100%.");
-    const { error } = await supabase
-      .from("platform_settings")
-      .update({ default_service_fee_pct: fee, updated_at: new Date().toISOString() })
-      .eq("id", true);
-    if (error) return toast.error(error.message);
-    setDefaultFee("");
-    toast.success("Taxa padrão atualizada.");
-    queryClient.invalidateQueries({ queryKey: ["admin-fee-settings"] });
-  }
-
   async function saveOverride() {
     const fee = Number(providerFee);
     if (!providerId || Number.isNaN(fee) || fee < 0 || fee > 100) return toast.error("Selecione o prestador e informe uma taxa entre 0 e 100%.");
@@ -189,11 +174,6 @@ export function Settings() {
       {isLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
       {data && <div className="space-y-6">
         <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
-          <div className="flex items-center gap-2 mb-2"><Percent className="h-5 w-5 text-primary" /><h2 className="font-bold">Taxa padrão da plataforma</h2></div>
-          <p className="text-xs text-muted-foreground mb-4">Aplicada a todo novo pedido quando o prestador não possuir uma taxa personalizada.</p>
-          <div className="flex max-w-sm gap-2"><input value={displayedDefault} onChange={(e) => setDefaultFee(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" className="h-11 flex-1 rounded-xl border border-border bg-background px-3" /><span className="h-11 flex items-center text-sm font-semibold">%</span><button onClick={saveDefault} className="h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-2"><Save className="h-4 w-4" />Salvar</button></div>
-        </section>
-        <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
           <div className="flex items-center gap-2 mb-1"><MapPinned className="h-5 w-5 text-primary" /><h2 className="font-bold">Regiões de lançamento</h2></div>
           <p className="text-xs text-muted-foreground mb-4">Use este controle para concentrar oferta e demanda em uma cidade-piloto. Quando ativo, o banco bloqueia novos pedidos fora das cidades configuradas.</p>
           {data.launchRegionSchemaPending ? <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">Execute a migration <code>0047_launch_regions.sql</code> no Supabase para habilitar este controle.</div> : <>
@@ -215,8 +195,8 @@ export function Settings() {
           </>}
         </section>
         <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
-          <h2 className="font-bold mb-1">Protecao do cliente e garantia</h2>
-          <p className="text-xs text-muted-foreground mb-4">A taxa e cobrada do cliente no checkout. O valor do servico fica indisponivel para saque durante a garantia.</p>
+          <div className="flex items-center gap-2 mb-1"><Percent className="h-5 w-5 text-primary" /><h2 className="font-bold">Taxa BICOJÁ e garantia</h2></div>
+          <p className="text-xs text-muted-foreground mb-4">Esta é a taxa efetivamente cobrada do cliente em todo novo pedido (a menos que o prestador tenha uma taxa personalizada abaixo). O valor do serviço fica indisponível para saque durante a garantia.</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <label className="text-xs font-semibold">Taxa ao cliente (%)<input value={displayedProtectionFee} onChange={(e) => setProtectionFee(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" className="mt-1 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm" /></label>
             <label className="text-xs font-semibold">Taxa minima (R$)<input value={displayedProtectionMin} onChange={(e) => setProtectionMin(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" className="mt-1 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm" /></label>
