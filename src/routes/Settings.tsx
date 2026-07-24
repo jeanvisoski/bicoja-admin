@@ -175,11 +175,11 @@ export function Settings() {
       {data && <div className="space-y-6">
         <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
           <div className="flex items-center gap-2 mb-1"><MapPinned className="h-5 w-5 text-primary" /><h2 className="font-bold">Regiões de lançamento</h2></div>
-          <p className="text-xs text-muted-foreground mb-4">Use este controle para concentrar oferta e demanda em uma cidade-piloto. Quando ativo, o banco bloqueia novos pedidos fora das cidades configuradas.</p>
+          <p className="text-xs text-muted-foreground mb-4"><strong>Esta é uma lista de liberação, não de bloqueio</strong>: você lista só as cidades onde JÁ quer atender (ex.: sua cidade-piloto). Ligando o controle, o banco passa a bloquear automaticamente todo o resto do mundo — você não precisa (e não deve) listar cidades pra bloquear.</p>
           {data.launchRegionSchemaPending ? <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">Execute a migration <code>0047_launch_regions.sql</code> no Supabase para habilitar este controle.</div> : <>
-            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={displayedLaunchRegionsEnabled} onChange={(event) => setLaunchRegionsEnabled(event.target.checked)} /> Restringir atendimento às cidades abaixo</label>
-            <label className="mt-4 block text-xs font-semibold">Cidades ativas<textarea value={displayedLaunchRegionsText} onChange={(event) => setLaunchRegionsText(event.target.value)} placeholder={"Erechim, RS\nPasso Fundo, RS"} rows={4} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" /></label>
-            <p className="mt-2 text-[11px] text-muted-foreground">Uma por linha, sempre no formato <strong>Cidade, UF</strong>. Deixe o bloqueio desligado para permitir pedidos em qualquer região.</p>
+            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={displayedLaunchRegionsEnabled} onChange={(event) => setLaunchRegionsEnabled(event.target.checked)} /> Atender SOMENTE as cidades liberadas abaixo (bloqueia todo o resto)</label>
+            <label className="mt-4 block text-xs font-semibold">Cidades liberadas<textarea value={displayedLaunchRegionsText} onChange={(event) => setLaunchRegionsText(event.target.value)} placeholder={"Erechim, RS\nPasso Fundo, RS"} rows={4} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" /></label>
+            <p className="mt-2 text-[11px] text-muted-foreground">Uma por linha, sempre no formato <strong>Cidade, UF</strong>. Com o controle desligado, qualquer cidade é aceita.</p>
             <button onClick={saveLaunchRegions} className="mt-4 h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-2"><Save className="h-4 w-4" />Salvar regiões</button>
           </>}
         </section>
