@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { useAdminSession } from "@/lib/admin-session";
 
 type RequestRow = {
   id: string;
@@ -32,6 +33,14 @@ const STATUSES = [
 ] as const;
 
 const STATUS_LABEL = Object.fromEntries(STATUSES.map((status) => [status.value, status.label]));
+
+// "Contratado" só deve acontecer pela RPC confirm_order_payment, que trava a
+// solicitação, cria o pedido e recusa as propostas concorrentes atomicamente.
+// Setar isso manualmente marcaria a solicitação como contratada sem nenhum
+// pedido de verdade por trás.
+const MANUAL_ADJUSTABLE_STATUSES = STATUSES.filter(
+  (s) => s.value !== "todos" && s.value !== "contratado",
+);
 
 function locationInfo(request: RequestRow) {
   const address = request.addresses;
@@ -65,13 +74,42 @@ export function Requests() {
   const [status, setStatus] = useState("aberto");
   const { data: requests = [], isLoading } = useRequests(status);
   const queryClient = useQueryClient();
+  const { session } = useAdminSession();
 
   async function updateStatus(request: RequestRow, nextStatus: string) {
+    if (nextStatus === "aberto") {
+      const { data: activeOrder } = await supabase
+        .from("orders")
+        .select("id")
+        .eq("request_id", request.id)
+        .not("status", "in", "(aguardando_pagamento,cancelado)")
+        .maybeSingle();
+      if (activeOrder) {
+        toast.error(
+          "Esta solicitação já tem um pedido em andamento — reabri-la pode permitir uma contratação duplicada.",
+        );
+        return;
+      }
+    }
+    const reason = window.prompt(
+      `Motivo do ajuste manual de "${STATUS_LABEL[request.status] ?? request.status}" para "${STATUS_LABEL[nextStatus] ?? nextStatus}":`,
+    );
+    if (reason === null) return;
+    if (reason.trim().length < 10) {
+      toast.error("Descreva o motivo do ajuste com pelo menos 10 caracteres.");
+      return;
+    }
     const { error } = await supabase
       .from("service_requests")
       .update({ status: nextStatus })
       .eq("id", request.id);
     if (error) return toast.error(error.message);
+    await supabase.rpc("record_operational_audit", {
+      p_entity_type: "service_request",
+      p_entity_id: request.id,
+      p_action: `manual_status_${nextStatus}`,
+      p_details: { from: request.status, note: reason.trim(), admin: session?.user.email },
+    });
     toast.success("Status da solicitação atualizado.");
     queryClient.invalidateQueries({ queryKey: ["admin-requests"] });
     queryClient.invalidateQueries({ queryKey: ["admin-kpis"] });
@@ -142,16 +180,20 @@ export function Requests() {
                 </td>
                 <td className="p-3 text-muted-foreground">{new Date(request.created_at).toLocaleDateString("pt-BR")}</td>
                 <td className="p-3 text-right">
-                  <select
-                    value={request.status}
-                    onChange={(event) => updateStatus(request, event.target.value)}
-                    className="h-8 max-w-40 rounded-lg border border-border bg-background px-2 text-xs"
-                    aria-label="Alterar status da solicitação"
-                  >
-                    {STATUSES.filter((item) => item.value !== "todos").map((item) => (
-                      <option key={item.value} value={item.value}>{item.label}</option>
-                    ))}
-                  </select>
+                  {request.status === "contratado" ? (
+                    <span className="text-xs text-muted-foreground">Já contratada</span>
+                  ) : (
+                    <select
+                      value={request.status}
+                      onChange={(event) => updateStatus(request, event.target.value)}
+                      className="h-8 max-w-40 rounded-lg border border-border bg-background px-2 text-xs"
+                      aria-label="Alterar status da solicitação"
+                    >
+                      {MANUAL_ADJUSTABLE_STATUSES.map((item) => (
+                        <option key={item.value} value={item.value}>{item.label}</option>
+                      ))}
+                    </select>
+                  )}
                 </td>
               </tr>
               );
