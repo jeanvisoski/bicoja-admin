@@ -12,6 +12,15 @@ type RequestRow = {
   profiles: { full_name: string | null } | null;
   service_categories: { label: string } | null;
   proposals: { id: string }[] | null;
+  addresses: {
+    street: string | null;
+    number: string | null;
+    neighborhood: string | null;
+    city: string | null;
+    state: string | null;
+    lat: number | null;
+    lng: number | null;
+  } | null;
 };
 
 const STATUSES = [
@@ -24,13 +33,24 @@ const STATUSES = [
 
 const STATUS_LABEL = Object.fromEntries(STATUSES.map((status) => [status.value, status.label]));
 
+function locationInfo(request: RequestRow) {
+  const address = request.addresses;
+  if (!address) return { label: "Sem endereço", hasCoords: false };
+  const cityState = [address.city, address.state].filter(Boolean).join("/");
+  const label = cityState || "Sem cidade";
+  const hasCoords = address.lat != null && address.lng != null;
+  return { label, hasCoords };
+}
+
 function useRequests(status: string) {
   return useQuery({
     queryKey: ["admin-requests", status],
     queryFn: async () => {
       let query = supabase
         .from("service_requests")
-        .select("id, description, urgency, status, created_at, profiles(full_name), service_categories(label), proposals(id)")
+        .select(
+          "id, description, urgency, status, created_at, profiles(full_name), service_categories(label), proposals(id), addresses(street, number, neighborhood, city, state, lat, lng)",
+        )
         .order("created_at", { ascending: false })
         .limit(150);
       if (status !== "todos") query = query.eq("status", status);
@@ -88,6 +108,7 @@ export function Requests() {
             <tr>
               <th className="text-left p-3">Serviço</th>
               <th className="text-left p-3">Cliente</th>
+              <th className="text-left p-3">Localização</th>
               <th className="text-left p-3">Descrição</th>
               <th className="text-center p-3">Propostas</th>
               <th className="text-left p-3">Urgência</th>
@@ -97,10 +118,20 @@ export function Requests() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {requests.map((request) => (
+            {requests.map((request) => {
+              const location = locationInfo(request);
+              return (
               <tr key={request.id}>
                 <td className="p-3 font-medium">{request.service_categories?.label ?? "—"}</td>
                 <td className="p-3">{request.profiles?.full_name ?? "—"}</td>
+                <td className="p-3">
+                  <p>{location.label}</p>
+                  {!location.hasCoords && (
+                    <p className="text-[11px] text-destructive font-semibold">
+                      Sem coordenadas — não aparece para prestadores
+                    </p>
+                  )}
+                </td>
                 <td className="p-3 max-w-64 truncate" title={request.description}>{request.description}</td>
                 <td className="p-3 text-center font-semibold">{request.proposals?.length ?? 0}</td>
                 <td className="p-3 capitalize">{request.urgency.replace(/_/g, " ")}</td>
@@ -123,7 +154,8 @@ export function Requests() {
                   </select>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
