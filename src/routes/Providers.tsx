@@ -13,7 +13,23 @@ type ProviderRow = {
   rating_avg: number;
   jobs_count: number;
   profiles: { full_name: string | null; email: string | null } | null;
-  provider_verification_documents: { id: string; status: string; storage_path: string }[] | null;
+  provider_verification_documents:
+    | {
+        id: string;
+        document_type: string;
+        status: string;
+        storage_path: string;
+        created_at: string;
+      }[]
+    | null;
+};
+
+const DOCUMENT_TYPE_LABEL: Record<string, string> = {
+  identidade: "Identidade",
+  selfie: "Selfie c/ documento",
+  comprovante_endereco: "Comprovante de endereço",
+  certificado: "Certificado",
+  outro: "Outro",
 };
 
 const TABS = [
@@ -30,7 +46,7 @@ function useProviders(filter: string) {
       let query = supabase
         .from("provider_profiles")
         .select(
-          "profile_id, headline, city, specialties, verification_status, rating_avg, jobs_count, profiles(full_name, email), provider_verification_documents(id, status, storage_path)",
+          "profile_id, headline, city, specialties, verification_status, rating_avg, jobs_count, profiles(full_name, email), provider_verification_documents(id, document_type, status, storage_path, created_at)",
         )
         .order("member_since", { ascending: false });
       if (filter !== "todos") query = query.eq("verification_status", filter);
@@ -67,10 +83,17 @@ export function Providers() {
     queryClient.invalidateQueries({ queryKey: ["admin-providers"] });
   }
 
-  async function openLatestDocument(provider: ProviderRow) {
-    const document = provider.provider_verification_documents?.[0];
-    if (!document) return toast.error("Este prestador ainda nao enviou documentos.");
-    const { data, error } = await supabase.storage.from("provider-documents").createSignedUrl(document.storage_path, 120);
+  function latestDocumentsByType(provider: ProviderRow) {
+    const byType = new Map<string, ProviderRow["provider_verification_documents"] extends (infer T)[] | null ? T : never>();
+    for (const document of provider.provider_verification_documents ?? []) {
+      const current = byType.get(document.document_type);
+      if (!current || document.created_at > current.created_at) byType.set(document.document_type, document);
+    }
+    return [...byType.values()];
+  }
+
+  async function openDocument(storagePath: string) {
+    const { data, error } = await supabase.storage.from("provider-documents").createSignedUrl(storagePath, 120);
     if (error || !data?.signedUrl) return toast.error(error?.message ?? "Nao foi possivel abrir o documento.");
     window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   }
@@ -125,10 +148,22 @@ export function Providers() {
                 <Star className="h-3.5 w-3.5 fill-warn text-warn" />
                 {p.rating_avg} • {p.jobs_count} serviços
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Documentos enviados: {p.provider_verification_documents?.length ?? 0}</p>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {latestDocumentsByType(p).length === 0 && (
+                  <span className="text-xs text-muted-foreground">Nenhum documento enviado.</span>
+                )}
+                {latestDocumentsByType(p).map((document) => (
+                  <button
+                    key={document.id}
+                    onClick={() => openDocument(document.storage_path)}
+                    className={`h-8 px-3 rounded-lg border text-[11px] font-semibold ${document.status === "rejeitado" ? "border-destructive/40 text-destructive" : "border-border"}`}
+                  >
+                    {DOCUMENT_TYPE_LABEL[document.document_type] ?? document.document_type}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="flex flex-col gap-2 shrink-0">
-              <button onClick={() => openLatestDocument(p)} disabled={!p.provider_verification_documents?.length} className="h-9 px-4 rounded-lg border border-border text-xs font-semibold disabled:opacity-40">Documento</button>
               <button
                 onClick={() => setStatus(p.profile_id, "verificado")}
                 disabled={p.verification_status === "verificado"}
