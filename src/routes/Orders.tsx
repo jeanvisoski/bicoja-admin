@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Link } from "@tanstack/react-router";
 import { supabase } from "@/lib/supabase";
+import { useAdminSession } from "@/lib/admin-session";
 
 type OrderRow = {
   id: string;
@@ -25,6 +27,15 @@ const STATUSES = [
   { value: "em_disputa", label: "Em disputa" },
   { value: "cancelado", label: "Cancelado" },
 ] as const;
+
+// "Concluído" e "Cancelado" mexem em saldo do prestador e reembolso -- só
+// devem acontecer pela confirmação do próprio cliente/prestador ou pela
+// mediação de disputa (que credita/estorna corretamente). Ajustar esses dois
+// direto por aqui pulava o trigger de carteira e podia deixar saldo preso ou
+// liberado errado, então não entram nas opções de ajuste manual.
+const MANUAL_ADJUSTABLE_STATUSES = STATUSES.filter(
+  (s) => s.value !== "todos" && s.value !== "concluido" && s.value !== "cancelado",
+);
 
 function useOrders(status: string) {
   return useQuery({
@@ -51,14 +62,29 @@ export function Orders() {
   const [status, setStatus] = useState("todos");
   const { data: orders = [], isLoading } = useOrders(status);
   const queryClient = useQueryClient();
+  const { session } = useAdminSession();
 
   async function updateStatus(order: OrderRow, nextStatus: string) {
+    const reason = window.prompt(
+      `Motivo do ajuste manual de "${STATUS_LABEL[order.status] ?? order.status}" para "${STATUS_LABEL[nextStatus] ?? nextStatus}" (fica registrado no histórico do pedido):`,
+    );
+    if (reason === null) return;
+    if (reason.trim().length < 10) {
+      toast.error("Descreva o motivo do ajuste com pelo menos 10 caracteres.");
+      return;
+    }
     const { error } = await supabase.from("orders").update({ status: nextStatus }).eq("id", order.id);
     if (error) return toast.error(error.message);
     await supabase.from("order_status_events").insert({
       order_id: order.id,
       status: nextStatus,
-      note: "[Admin] Status ajustado pelo portal administrativo.",
+      note: `[Admin - ${session?.user.email}] ${reason.trim()}`,
+    });
+    await supabase.rpc("record_operational_audit", {
+      p_entity_type: "order",
+      p_entity_id: order.id,
+      p_action: `manual_status_${nextStatus}`,
+      p_details: { from: order.status, note: reason.trim() },
     });
     toast.success("Status do pedido atualizado.");
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
@@ -116,9 +142,25 @@ export function Orders() {
                   {new Date(o.created_at).toLocaleDateString("pt-BR")}
                 </td>
                 <td className="p-3 text-right">
-                  <select value={o.status} onChange={(e) => updateStatus(o, e.target.value)} className="h-8 max-w-40 rounded-lg border border-border bg-background px-2 text-xs">
-                    {STATUSES.filter((item) => item.value !== "todos").map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                  </select>
+                  {o.status === "em_disputa" ? (
+                    <Link to="/disputes" className="text-xs font-semibold text-primary">
+                      Resolver em Disputas →
+                    </Link>
+                  ) : o.status === "concluido" || o.status === "cancelado" ? (
+                    <span className="text-xs text-muted-foreground">Etapa final</span>
+                  ) : (
+                    <select
+                      value={o.status}
+                      onChange={(e) => updateStatus(o, e.target.value)}
+                      className="h-8 max-w-40 rounded-lg border border-border bg-background px-2 text-xs"
+                    >
+                      {MANUAL_ADJUSTABLE_STATUSES.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </td>
               </tr>
             ))}
