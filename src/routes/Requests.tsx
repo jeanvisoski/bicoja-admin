@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAdminSession } from "@/lib/admin-session";
 
@@ -70,11 +71,77 @@ function useRequests(status: string) {
   });
 }
 
+type RequestDetail = {
+  id: string;
+  description: string;
+  urgency: string;
+  status: string;
+  created_at: string;
+  profiles: { full_name: string | null; email: string | null; phone: string | null } | null;
+  service_categories: { label: string } | null;
+  addresses: {
+    street: string | null;
+    number: string | null;
+    neighborhood: string | null;
+    city: string | null;
+    state: string | null;
+  } | null;
+};
+
+type RequestPhoto = { id: string; photo_url: string };
+type ProposalRow = {
+  id: string;
+  price: number;
+  eta_minutes: number | null;
+  message: string | null;
+  status: string;
+  created_at: string;
+  provider_profiles: { profiles: { full_name: string | null } | null } | null;
+};
+
+const PROPOSAL_STATUS_LABEL: Record<string, string> = {
+  pendente: "Pendente",
+  aceita: "Aceita",
+  recusada: "Recusada",
+  expirada: "Expirada",
+};
+
+function useRequestDetail(requestId: string | undefined) {
+  return useQuery({
+    queryKey: ["admin-request-detail", requestId],
+    queryFn: async () => {
+      const [request, photos, proposals] = await Promise.all([
+        supabase
+          .from("service_requests")
+          .select(
+            "id, description, urgency, status, created_at, profiles(full_name, email, phone), service_categories(label), addresses(street, number, neighborhood, city, state)",
+          )
+          .eq("id", requestId)
+          .single<RequestDetail>(),
+        supabase.from("request_photos").select("id, photo_url").eq("request_id", requestId).returns<RequestPhoto[]>(),
+        supabase
+          .from("proposals")
+          .select("id, price, eta_minutes, message, status, created_at, provider_profiles(profiles(full_name))")
+          .eq("request_id", requestId)
+          .order("created_at", { ascending: false })
+          .returns<ProposalRow[]>(),
+      ]);
+      if (request.error) throw request.error;
+      if (photos.error) throw photos.error;
+      if (proposals.error) throw proposals.error;
+      return { request: request.data, photos: photos.data ?? [], proposals: proposals.data ?? [] };
+    },
+    enabled: !!requestId,
+  });
+}
+
 export function Requests() {
   const [status, setStatus] = useState("aberto");
   const { data: requests = [], isLoading } = useRequests(status);
   const queryClient = useQueryClient();
   const { session } = useAdminSession();
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const { data: detail, isLoading: loadingDetail } = useRequestDetail(detailId ?? undefined);
 
   async function updateStatus(request: RequestRow, nextStatus: string) {
     if (nextStatus === "aberto") {
@@ -160,7 +227,11 @@ export function Requests() {
               const location = locationInfo(request);
               return (
               <tr key={request.id}>
-                <td className="p-3 font-medium">{request.service_categories?.label ?? "—"}</td>
+                <td className="p-3 font-medium">
+                  <button onClick={() => setDetailId(request.id)} className="hover:underline text-left">
+                    {request.service_categories?.label ?? "—"}
+                  </button>
+                </td>
                 <td className="p-3">{request.profiles?.full_name ?? "—"}</td>
                 <td className="p-3">
                   <p>{location.label}</p>
@@ -201,6 +272,102 @@ export function Requests() {
           </tbody>
         </table>
       </div>
+
+      {detailId && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-card border border-border rounded-2xl p-6 shadow-float">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold">{detail?.request.service_categories?.label ?? "Solicitação"}</h2>
+              <button type="button" onClick={() => setDetailId(null)}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {loadingDetail && <p className="text-sm text-muted-foreground">Carregando...</p>}
+
+            {detail?.request && (
+              <div className="space-y-5">
+                <div className="p-3 rounded-xl bg-secondary text-xs">
+                  <p className="font-semibold text-muted-foreground mb-1">Cliente</p>
+                  <p>{detail.request.profiles?.full_name ?? "—"}</p>
+                  <p className="text-muted-foreground">{detail.request.profiles?.email}</p>
+                  <p className="text-muted-foreground">{detail.request.profiles?.phone}</p>
+                </div>
+
+                <div className="text-xs">
+                  <p className="font-semibold text-muted-foreground mb-1">Endereço</p>
+                  <p>
+                    {[detail.request.addresses?.street, detail.request.addresses?.number]
+                      .filter(Boolean)
+                      .join(", ")}{" "}
+                    {detail.request.addresses?.neighborhood
+                      ? `— ${detail.request.addresses.neighborhood}`
+                      : ""}{" "}
+                    —{" "}
+                    {[detail.request.addresses?.city, detail.request.addresses?.state]
+                      .filter(Boolean)
+                      .join("/")}
+                  </p>
+                </div>
+
+                <div className="text-xs">
+                  <p className="font-semibold text-muted-foreground mb-1">Descrição</p>
+                  <p>{detail.request.description}</p>
+                </div>
+
+                {detail.photos.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground mb-2">Fotos</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {detail.photos.map((photo) => (
+                        <a key={photo.id} href={photo.photo_url} target="_blank" rel="noopener noreferrer">
+                          <img
+                            src={photo.photo_url}
+                            alt=""
+                            className="aspect-square object-cover rounded-lg border border-border"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">
+                    Propostas recebidas ({detail.proposals.length})
+                  </p>
+                  {detail.proposals.length === 0 && (
+                    <p className="text-xs text-muted-foreground">Nenhuma proposta ainda.</p>
+                  )}
+                  <div className="space-y-2">
+                    {detail.proposals.map((proposal) => (
+                      <div
+                        key={proposal.id}
+                        className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-secondary"
+                      >
+                        <div>
+                          <p className="font-semibold">
+                            {proposal.provider_profiles?.profiles?.full_name ?? "Prestador"}
+                          </p>
+                          {proposal.message && (
+                            <p className="text-muted-foreground">{proposal.message}</p>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-semibold">R$ {proposal.price?.toFixed(2)}</p>
+                          <p className="text-muted-foreground">
+                            {PROPOSAL_STATUS_LABEL[proposal.status] ?? proposal.status}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
