@@ -76,16 +76,6 @@ export function Wallets() {
     return acc;
   }, {} as Record<string, number>);
 
-  async function setStatus(row: WalletRow, status: WalletRow["status"]) {
-    const { error } = await supabase
-      .from("wallet_transactions")
-      .update({ status, available_at: status === "disponivel" ? new Date().toISOString() : row.available_at })
-      .eq("id", row.id);
-    if (error) return toast.error(error.message);
-    toast.success(status === "pago" ? "Saque marcado como pago." : "Saldo liberado.");
-    queryClient.invalidateQueries({ queryKey: ["admin-wallets"] });
-  }
-
   async function reviewPayout(payout: PayoutRequest, status: "aprovado" | "pago" | "rejeitado") {
     const reference = status === "pago" ? window.prompt("Informe o identificador/comprovante da transferencia Pix:") : null;
     if (status === "pago" && !reference) return;
@@ -116,20 +106,35 @@ export function Wallets() {
       <section className="mb-6 rounded-2xl border border-border bg-card p-5"><h2 className="font-bold">Solicitacoes de saque</h2><p className="text-xs text-muted-foreground mt-1 mb-4">Valide a chave Pix, transfira fora da plataforma e registre o comprovante.</p>{payouts.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum saque aguardando analise.</p> : <div className="space-y-3">{payouts.map((payout) => <div key={payout.id} className="rounded-xl border border-border p-3 flex items-center gap-3"><div className="flex-1"><p className="text-sm font-semibold">{payout.profiles?.full_name ?? "Prestador"} · R$ {Number(payout.amount).toFixed(2)}</p><p className="text-xs text-muted-foreground">Pix: {payout.destination_snapshot?.pix_key ?? "—"} · {payout.destination_snapshot?.holder_name ?? "—"}</p></div><div className="flex gap-2">{payout.status === "solicitado" && <><button onClick={() => reviewPayout(payout, "aprovado")} className="h-8 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold">Aprovar</button><button onClick={() => reviewPayout(payout, "rejeitado")} className="h-8 px-3 rounded-lg border border-destructive text-destructive text-xs font-semibold">Rejeitar</button></>}{payout.status === "aprovado" && <button onClick={() => reviewPayout(payout, "pago")} className="h-8 px-3 rounded-lg bg-trust text-primary-foreground text-xs font-semibold">Marcar pago</button>}</div></div>)}</div>}</section>
       {isLoading && <p className="text-sm text-muted-foreground">Carregando carteira...</p>}
       {!isLoading && transactions.length === 0 && <div className="rounded-2xl border border-border bg-card p-8 text-center text-muted-foreground"><WalletCards className="h-9 w-9 mx-auto mb-3" />Nenhuma movimentação.</div>}
+      <p className="text-xs text-muted-foreground mb-2">
+        Extrato somente leitura. "Pendente"/"Em garantia" liberam sozinhos quando o cliente confirma
+        ou o prazo de garantia vence (ou por mediação de disputa, em Disputas); saques só saem
+        marcados como pagos pela seção "Solicitações de saque" acima, com o comprovante Pix
+        registrado.
+      </p>
       <div className="bg-card border border-border rounded-2xl overflow-hidden divide-y divide-border">
         {transactions.map((row) => (
           <div key={row.id} className="p-4 flex items-center gap-4">
             <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${["pendente", "em_garantia", "congelado"].includes(row.status) ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{["pendente", "em_garantia", "congelado"].includes(row.status) ? <Clock3 className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}</div>
             <div className="flex-1"><p className="font-semibold text-sm">{row.profiles?.full_name ?? "Prestador"}</p><p className="text-xs text-muted-foreground">Pedido #{row.orders?.id.slice(0, 8) ?? "—"} · {row.type}</p></div>
             <p className="font-bold">R$ {Number(row.amount).toFixed(2)}</p>
-            {row.status === "pendente" && <button onClick={() => setStatus(row, "disponivel")} className="h-9 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold">Liberar</button>}
-            {row.status === "disponivel" && <button onClick={() => setStatus(row, "pago")} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold">Marcar pago</button>}
+            <span className="text-xs font-semibold px-2 py-1 rounded-full bg-secondary text-muted-foreground">{WALLET_STATUS_LABEL[row.status] ?? row.status}</span>
           </div>
         ))}
       </div>
     </div>
   );
 }
+
+const WALLET_STATUS_LABEL: Record<string, string> = {
+  pendente: "Aguardando confirmação",
+  em_garantia: "Em garantia",
+  congelado: "Congelado (disputa)",
+  disponivel: "Disponível",
+  reservado: "Saque em processamento",
+  pago: "Pago",
+  reembolsado: "Reembolsado",
+};
 
 function Stat({ label, value, tint }: { label: string; value: number; tint: string }) {
   return <div className={`rounded-2xl p-4 ${tint}`}><p className="text-xs font-semibold">{label}</p><p className="text-xl font-extrabold mt-1">R$ {value.toFixed(2)}</p></div>;
