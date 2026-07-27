@@ -27,6 +27,7 @@ type OrderDetail = {
   final_price: number | null;
   refund_due: number;
   refund_status: string;
+  payment_status: string;
   cancellation_reason: string | null;
   created_at: string;
   service_requests: {
@@ -50,7 +51,7 @@ function useOrderDetail(orderId: string | undefined) {
         supabase
           .from("orders")
           .select(
-            "id, status, price, platform_fee, customer_protection_fee, total, final_price, refund_due, refund_status, cancellation_reason, created_at, service_requests(description, addresses(street, number, city, state)), profiles(full_name, email, phone), provider_profiles(profiles(full_name, email, phone))",
+            "id, status, price, platform_fee, customer_protection_fee, total, final_price, refund_due, refund_status, payment_status, cancellation_reason, created_at, service_requests(description, addresses(street, number, city, state)), profiles(full_name, email, phone), provider_profiles(profiles(full_name, email, phone))",
           )
           .eq("id", orderId)
           .single<OrderDetail>(),
@@ -133,6 +134,55 @@ export function Orders() {
   const { session } = useAdminSession();
   const [detailId, setDetailId] = useState<string | null>(null);
   const { data: detail, isLoading: loadingDetail } = useOrderDetail(detailId ?? undefined);
+  const [refunding, setRefunding] = useState(false);
+  const [refundType, setRefundType] = useState<"total" | "parcial">("total");
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundNote, setRefundNote] = useState("");
+  const [submittingRefund, setSubmittingRefund] = useState(false);
+
+  async function submitRefund() {
+    if (!detail?.order) return;
+    if (refundNote.trim().length < 10) {
+      toast.error("Descreva o motivo do reembolso com pelo menos 10 caracteres.");
+      return;
+    }
+    const amount = refundType === "total" ? null : Number(refundAmount);
+    if (refundType === "parcial" && (!amount || amount <= 0 || amount >= detail.order.total)) {
+      toast.error("Informe um valor parcial válido, menor que o total do pedido.");
+      return;
+    }
+    setSubmittingRefund(true);
+    const { error: rpcError } = await supabase.rpc("admin_refund_order", {
+      p_order_id: detail.order.id,
+      p_refund_amount: amount,
+      p_note: refundNote.trim(),
+    });
+    if (rpcError) {
+      setSubmittingRefund(false);
+      toast.error(rpcError.message);
+      return;
+    }
+    const { error: gatewayError } = await supabase.functions.invoke("mercadopago-refund", {
+      body: { orderId: detail.order.id },
+    });
+    setSubmittingRefund(false);
+    if (gatewayError) {
+      toast.error(`Reembolso registrado, mas o estorno no Mercado Pago falhou: ${gatewayError.message}`);
+    } else {
+      toast.success("Reembolso processado.");
+    }
+    await supabase.rpc("record_operational_audit", {
+      p_entity_type: "order",
+      p_entity_id: detail.order.id,
+      p_action: `refund_${refundType}`,
+      p_details: { amount: amount ?? detail.order.total, note: refundNote.trim() },
+    });
+    setRefunding(false);
+    setRefundAmount("");
+    setRefundNote("");
+    queryClient.invalidateQueries({ queryKey: ["admin-order-detail", detail.order.id] });
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+  }
 
   async function updateStatus(order: OrderRow, nextStatus: string) {
     const reason = window.prompt(
@@ -338,6 +388,71 @@ export function Orders() {
                     )}
                   </div>
                 </div>
+
+                {detail.order.payment_status === "confirmado" &&
+                  detail.order.refund_status !== "processado" && (
+                    <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3">
+                      {!refunding ? (
+                        <button
+                          onClick={() => setRefunding(true)}
+                          className="text-xs font-semibold text-destructive"
+                        >
+                          Reembolsar este pedido
+                        </button>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold text-destructive">
+                            Reembolsar pedido
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setRefundType("total")}
+                              className={`h-8 px-3 rounded-lg text-xs font-semibold border ${refundType === "total" ? "bg-destructive text-destructive-foreground border-destructive" : "border-border"}`}
+                            >
+                              Total (R$ {detail.order.total?.toFixed(2)})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRefundType("parcial")}
+                              className={`h-8 px-3 rounded-lg text-xs font-semibold border ${refundType === "parcial" ? "bg-destructive text-destructive-foreground border-destructive" : "border-border"}`}
+                            >
+                              Parcial
+                            </button>
+                          </div>
+                          {refundType === "parcial" && (
+                            <input
+                              value={refundAmount}
+                              onChange={(e) => setRefundAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                              placeholder="Valor a reembolsar"
+                              className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
+                            />
+                          )}
+                          <textarea
+                            value={refundNote}
+                            onChange={(e) => setRefundNote(e.target.value)}
+                            placeholder="Motivo do reembolso (fica registrado no histórico)"
+                            className="h-16 w-full rounded-lg border border-border bg-background p-2 text-xs resize-none"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={submitRefund}
+                              disabled={submittingRefund}
+                              className="h-9 px-3 rounded-lg bg-destructive text-destructive-foreground text-xs font-semibold disabled:opacity-50"
+                            >
+                              {submittingRefund ? "Processando..." : "Confirmar reembolso"}
+                            </button>
+                            <button
+                              onClick={() => setRefunding(false)}
+                              className="h-9 px-3 rounded-lg border border-border text-xs font-semibold"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                 {detail.photos.length > 0 && (
                   <div>

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCircle2, Clock3, WalletCards } from "lucide-react";
+import { CheckCircle2, Clock3, Lock, Unlock, WalletCards } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type WalletRow = {
@@ -66,10 +66,55 @@ function usePayoutDestinations() {
   });
 }
 
+type ProviderBalanceRow = {
+  profile_id: string;
+  full_name: string | null;
+  payouts_frozen: boolean;
+  available: number;
+  pending: number;
+};
+
+function useProviderBalances() {
+  return useQuery({
+    queryKey: ["admin-provider-balances"],
+    queryFn: async () => {
+      const [{ data: providers, error: providersError }, { data: wallet, error: walletError }] =
+        await Promise.all([
+          supabase
+            .from("provider_profiles")
+            .select("profile_id, payouts_frozen, profiles(full_name)")
+            .returns<{ profile_id: string; payouts_frozen: boolean; profiles: { full_name: string | null } | null }[]>(),
+          supabase.from("wallet_transactions").select("provider_id, amount, status"),
+        ]);
+      if (providersError) throw providersError;
+      if (walletError) throw walletError;
+      const byProvider = new Map<string, { available: number; pending: number }>();
+      for (const w of wallet ?? []) {
+        const entry = byProvider.get(w.provider_id) ?? { available: 0, pending: 0 };
+        if (w.status === "disponivel") entry.available += Number(w.amount);
+        else if (["pendente", "em_garantia", "congelado", "reservado"].includes(w.status))
+          entry.pending += Number(w.amount);
+        byProvider.set(w.provider_id, entry);
+      }
+      return (providers ?? [])
+        .map((p) => ({
+          profile_id: p.profile_id,
+          full_name: p.profiles?.full_name ?? null,
+          payouts_frozen: p.payouts_frozen,
+          available: byProvider.get(p.profile_id)?.available ?? 0,
+          pending: byProvider.get(p.profile_id)?.pending ?? 0,
+        }))
+        .filter((p) => p.available > 0 || p.pending > 0 || p.payouts_frozen)
+        .sort((a, b) => b.available - a.available) as ProviderBalanceRow[];
+    },
+  });
+}
+
 export function Wallets() {
   const { data: transactions = [], isLoading } = useWallets();
   const { data: payouts = [] } = usePayoutRequests();
   const { data: destinations = [] } = usePayoutDestinations();
+  const { data: providerBalances = [] } = useProviderBalances();
   const queryClient = useQueryClient();
   const totals = transactions.reduce((acc, row) => {
     acc[row.status] = (acc[row.status] ?? 0) + Number(row.amount);
@@ -93,6 +138,28 @@ export function Wallets() {
     queryClient.invalidateQueries({ queryKey: ["admin-payout-destinations"] });
   }
 
+  async function togglePayoutsFrozen(provider: ProviderBalanceRow) {
+    const nextFrozen = !provider.payouts_frozen;
+    const note = window.prompt(
+      nextFrozen
+        ? `Motivo pra congelar o saldo de ${provider.full_name ?? "este prestador"}:`
+        : `Motivo pra liberar o saldo de ${provider.full_name ?? "este prestador"}:`,
+    );
+    if (note === null) return;
+    if (note.trim().length < 10) {
+      toast.error("Descreva o motivo com pelo menos 10 caracteres.");
+      return;
+    }
+    const { error } = await supabase.rpc("admin_set_payouts_frozen", {
+      p_provider_id: provider.profile_id,
+      p_frozen: nextFrozen,
+      p_note: note.trim(),
+    });
+    if (error) return toast.error(error.message);
+    toast.success(nextFrozen ? "Saldo congelado." : "Saldo liberado para saque.");
+    queryClient.invalidateQueries({ queryKey: ["admin-provider-balances"] });
+  }
+
   return (
     <div className="p-8 max-w-6xl mx-auto">
       <h1 className="text-2xl font-extrabold tracking-tight">Carteira e repasses</h1>
@@ -102,6 +169,51 @@ export function Wallets() {
         <Stat label="Disponível" value={totals.disponivel ?? 0} tint="bg-emerald-100 text-emerald-700" />
         <Stat label="Pago" value={totals.pago ?? 0} tint="bg-slate-100 text-slate-700" />
       </div>
+      <section className="mb-6 rounded-2xl border border-border bg-card p-5">
+        <h2 className="font-bold">Prestadores</h2>
+        <p className="text-xs text-muted-foreground mt-1 mb-4">
+          Congele o saldo de um prestador específico sem suspender a conta -- ele continua
+          recebendo pedidos normalmente, só não consegue solicitar saque enquanto estiver
+          congelado.
+        </p>
+        {providerBalances.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhum prestador com saldo no momento.</p>
+        ) : (
+          <div className="space-y-3">
+            {providerBalances.map((provider) => (
+              <div
+                key={provider.profile_id}
+                className={`rounded-xl border p-3 flex items-center gap-3 ${provider.payouts_frozen ? "border-destructive/40 bg-destructive/5" : "border-border"}`}
+              >
+                <div className="flex-1">
+                  <p className="text-sm font-semibold">{provider.full_name ?? "Prestador"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Disponível: R$ {provider.available.toFixed(2)} · Pendente: R${" "}
+                    {provider.pending.toFixed(2)}
+                  </p>
+                  {provider.payouts_frozen && (
+                    <p className="text-xs font-semibold text-destructive mt-0.5">Saldo congelado</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => togglePayoutsFrozen(provider)}
+                  className={`h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 ${provider.payouts_frozen ? "bg-trust text-primary-foreground" : "border border-destructive text-destructive"}`}
+                >
+                  {provider.payouts_frozen ? (
+                    <>
+                      <Unlock className="h-3.5 w-3.5" /> Liberar
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="h-3.5 w-3.5" /> Congelar
+                    </>
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
       <section className="mb-6 rounded-2xl border border-border bg-card p-5"><h2 className="font-bold">Chaves Pix aguardando validacao</h2>{destinations.length === 0 ? <p className="text-sm text-muted-foreground mt-3">Nenhuma chave pendente.</p> : <div className="space-y-3 mt-4">{destinations.map((destination) => <div key={destination.provider_id} className="rounded-xl border border-border p-3 flex items-center gap-3"><div className="flex-1"><p className="text-sm font-semibold">{destination.full_name}</p><p className="text-xs text-muted-foreground">{destination.pix_key_type}: {destination.pix_key} · {destination.holder_name}</p></div><button onClick={() => verifyDestination(destination.provider_id, "verificado")} className="h-8 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold">Validar</button><button onClick={() => verifyDestination(destination.provider_id, "desativado")} className="h-8 px-3 rounded-lg border border-destructive text-destructive text-xs font-semibold">Recusar</button></div>)}</div>}</section>
       <section className="mb-6 rounded-2xl border border-border bg-card p-5"><h2 className="font-bold">Solicitacoes de saque</h2><p className="text-xs text-muted-foreground mt-1 mb-4">Valide a chave Pix, transfira fora da plataforma e registre o comprovante.</p>{payouts.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum saque aguardando analise.</p> : <div className="space-y-3">{payouts.map((payout) => <div key={payout.id} className="rounded-xl border border-border p-3 flex items-center gap-3"><div className="flex-1"><p className="text-sm font-semibold">{payout.profiles?.full_name ?? "Prestador"} · R$ {Number(payout.amount).toFixed(2)}</p><p className="text-xs text-muted-foreground">Pix: {payout.destination_snapshot?.pix_key ?? "—"} · {payout.destination_snapshot?.holder_name ?? "—"}</p></div><div className="flex gap-2">{payout.status === "solicitado" && <><button onClick={() => reviewPayout(payout, "aprovado")} className="h-8 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold">Aprovar</button><button onClick={() => reviewPayout(payout, "rejeitado")} className="h-8 px-3 rounded-lg border border-destructive text-destructive text-xs font-semibold">Rejeitar</button></>}{payout.status === "aprovado" && <button onClick={() => reviewPayout(payout, "pago")} className="h-8 px-3 rounded-lg bg-trust text-primary-foreground text-xs font-semibold">Marcar pago</button>}</div></div>)}</div>}</section>
       {isLoading && <p className="text-sm text-muted-foreground">Carregando carteira...</p>}
