@@ -265,20 +265,49 @@ export function Settings() {
             <button onClick={saveStoreLinks} className="mt-4 h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-2"><Save className="h-4 w-4" />Salvar links das lojas</button>
           </>}
         </section>
+        <section className="bg-primary/5 border border-primary/20 rounded-2xl p-5 shadow-card">
+          <div className="flex items-center gap-2 mb-2"><Percent className="h-5 w-5 text-primary" /><h2 className="font-bold">Como a taxa BICOJÁ é calculada</h2></div>
+          <p className="text-xs text-muted-foreground mb-3">Toda vez que um cliente contrata um serviço, o sistema decide a taxa nesta ordem — a primeira regra que se aplicar é a que vale:</p>
+          <ol className="space-y-2 text-xs">
+            <li className="flex gap-2"><span className="shrink-0 h-5 w-5 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center">1</span><span><strong>Taxa por prestador</strong> (seção mais abaixo) — se esse prestador específico tiver uma taxa personalizada cadastrada, ela é usada e as faixas nem entram no cálculo.</span></li>
+            <li className="flex gap-2"><span className="shrink-0 h-5 w-5 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center">2</span><span><strong>Faixas de taxa degressiva</strong> (próxima seção) — se não houver taxa personalizada e existir ao menos uma faixa cadastrada, o valor é calculado por elas.</span></li>
+            <li className="flex gap-2"><span className="shrink-0 h-5 w-5 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center">3</span><span><strong>Taxa fixa</strong> (logo abaixo) — só é usada como último recurso, se não houver taxa personalizada nem nenhuma faixa cadastrada.</span></li>
+          </ol>
+        </section>
         <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
-          <div className="flex items-center gap-2 mb-1"><Percent className="h-5 w-5 text-primary" /><h2 className="font-bold">Taxa BICOJÁ e garantia</h2></div>
-          <p className="text-xs text-muted-foreground mb-4">Esta taxa só é usada como fallback: se houver faixas degressivas cadastradas abaixo, elas têm prioridade (a menos que o prestador tenha uma taxa personalizada). O valor do serviço fica indisponível para saque durante a garantia.</p>
+          <div className="flex items-center gap-2 mb-1"><Percent className="h-5 w-5 text-primary" /><h2 className="font-bold">Taxa fixa (modo de segurança) e garantia</h2></div>
+          <p className="text-xs text-muted-foreground mb-4">Esta taxa só entra em ação se a tabela de faixas abaixo estiver vazia e o prestador não tiver taxa personalizada — funciona como uma rede de segurança caso as faixas sejam apagadas por engano.</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <label className="text-xs font-semibold">Taxa ao cliente (%)<input value={displayedProtectionFee} onChange={(e) => setProtectionFee(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" className="mt-1 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm" /></label>
-            <label className="text-xs font-semibold">Taxa minima (R$)<input value={displayedProtectionMin} onChange={(e) => setProtectionMin(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" className="mt-1 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm" /></label>
-            <label className="text-xs font-semibold">Garantia (dias)<input value={displayedGuaranteeDays} onChange={(e) => setGuaranteeDays(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" className="mt-1 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm" /></label>
-            <label className="text-xs font-semibold">Confirmacao automatica (h)<input value={displayedCompletionHours} onChange={(e) => setCompletionHours(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" className="mt-1 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm" /></label>
+            <label className="text-xs font-semibold">Taxa ao cliente (%)
+              <span className="block font-normal text-[11px] text-muted-foreground mt-0.5 mb-1">Percentual cobrado sobre o valor do serviço quando não há faixas cadastradas.</span>
+              <input value={displayedProtectionFee} onChange={(e) => setProtectionFee(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm" />
+            </label>
+            <label className="text-xs font-semibold">Taxa mínima (R$)
+              <span className="block font-normal text-[11px] text-muted-foreground mt-0.5 mb-1">Valor mínimo cobrado mesmo se o percentual der menos (evita taxa irrisória em serviço muito barato).</span>
+              <input value={displayedProtectionMin} onChange={(e) => setProtectionMin(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm" />
+            </label>
+            <label className="text-xs font-semibold">Garantia (dias)
+              <span className="block font-normal text-[11px] text-muted-foreground mt-0.5 mb-1">Dias que o valor fica retido após a conclusão, dando tempo do cliente reportar algum problema antes do saque liberar.</span>
+              <input value={displayedGuaranteeDays} onChange={(e) => setGuaranteeDays(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm" />
+            </label>
+            <label className="text-xs font-semibold">Confirmação automática (h)
+              <span className="block font-normal text-[11px] text-muted-foreground mt-0.5 mb-1">Se o cliente não confirmar nem reportar problema, o pedido é liberado sozinho após essas horas.</span>
+              <input value={displayedCompletionHours} onChange={(e) => setCompletionHours(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm" />
+            </label>
           </div>
           <button onClick={saveProtectionSettings} className="mt-4 h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-2"><Save className="h-4 w-4" />Salvar protecao</button>
         </section>
         <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
           <div className="flex items-center gap-2 mb-1"><Layers className="h-5 w-5 text-primary" /><h2 className="font-bold">Faixas de taxa degressiva</h2></div>
-          <p className="text-xs text-muted-foreground mb-4">Taxa progressiva por faixas, igual imposto de renda: cada faixa se aplica só à parte do valor dentro dela, nunca ao orçamento inteiro. Assim um orçamento maior nunca paga uma taxa menor que um menor. Deixe vazio para usar a taxa fixa acima.</p>
+          <p className="text-xs text-muted-foreground mb-2">Taxa progressiva por faixas, igual imposto de renda: cada faixa se aplica só à parte do valor <strong>dentro dela</strong>, nunca ao orçamento inteiro. Assim um orçamento maior nunca paga uma taxa absoluta menor que um menor. Se você apagar todas as faixas, o sistema volta a usar a taxa fixa da seção acima.</p>
+          <div className="rounded-xl bg-secondary/60 p-3 mb-4 text-[11px] text-muted-foreground space-y-1">
+            <p className="font-semibold text-foreground">Como configurar:</p>
+            <p>1. Cada linha é uma faixa: preencha "De" (início), "Até" (fim) e "Taxa" (percentual cobrado só naquela fatia do valor).</p>
+            <p>2. As faixas precisam ser contínuas — o "De" de uma faixa deve ser igual ao "Até" da anterior. O sistema avisa se ficar um buraco ou sobreposição.</p>
+            <p>3. Deixe "Até" vazio só na última linha (ela cobre "sem limite" pra cima).</p>
+            <p>4. Exemplo: de R$0 a R$300 cobrando 10% e de R$300 a R$1.000 cobrando 8% — um orçamento de R$500 paga 10% dos primeiros R$300 (R$30) + 8% dos R$200 restantes (R$16) = R$46 no total, não R$500 × 8%.</p>
+            <p>5. Use o simulador no final desta seção pra conferir o efeito antes de salvar.</p>
+          </div>
           {data.feeTierSchemaPending ? (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">Execute a migration <code>0061_tiered_platform_fee.sql</code> no Supabase para habilitar esta configuração.</div>
           ) : (
@@ -302,7 +331,8 @@ export function Settings() {
               </div>
               <div className="mt-5 pt-4 border-t border-border">
                 <label className="text-xs font-semibold">Simular orçamento (R$)
-                  <input value={simulateAmount} onChange={(e) => setSimulateAmount(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" placeholder="2900" className="mt-1 h-11 w-full sm:w-48 rounded-xl border border-border bg-background px-3 text-sm" />
+                  <span className="block font-normal text-[11px] text-muted-foreground mt-0.5 mb-1">Digite um valor de serviço pra ver exatamente quanto de taxa essas faixas vão gerar, antes de salvar.</span>
+                  <input value={simulateAmount} onChange={(e) => setSimulateAmount(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" placeholder="2900" className="h-11 w-full sm:w-48 rounded-xl border border-border bg-background px-3 text-sm" />
                 </label>
                 {simulateAmount && !Number.isNaN(Number(simulateAmount)) && (
                   <p className="mt-2 text-sm">
@@ -327,7 +357,7 @@ export function Settings() {
         </section>
         <section className="bg-card border border-border rounded-2xl p-5 shadow-card">
           <h2 className="font-bold mb-1">Taxa por prestador</h2>
-          <p className="text-xs text-muted-foreground mb-4">Substitui a taxa padrão somente para esse prestador.</p>
+          <p className="text-xs text-muted-foreground mb-4">Um percentual fixo negociado individualmente (ex.: parceria, prestador de grande volume). <strong>Tem prioridade sobre tudo</strong> — ignora completamente as faixas degressivas e a taxa fixa para esse prestador. Use com moderação: cada prestador aqui sai do cálculo automático das faixas.</p>
           <div className="grid md:grid-cols-[1fr_150px_auto] gap-2 mb-5"><select value={providerId} onChange={(e) => setProviderId(e.target.value)} className="h-11 rounded-xl border border-border bg-background px-3 text-sm"><option value="">Selecione um prestador</option>{data.providers.map((provider) => <option key={provider.profile_id} value={provider.profile_id}>{provider.profiles?.full_name ?? provider.profiles?.email ?? "Prestador"}</option>)}</select><input value={providerFee} onChange={(e) => setProviderFee(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="Taxa (%)" inputMode="decimal" className="h-11 rounded-xl border border-border bg-background px-3" /><button onClick={saveOverride} className="h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">Aplicar</button></div>
           <div className="divide-y divide-border border border-border rounded-xl overflow-hidden">{data.overrides.length === 0 ? <p className="p-4 text-sm text-muted-foreground">Nenhuma taxa personalizada configurada.</p> : data.overrides.map((override) => <div key={override.provider_id} className="p-3 flex items-center justify-between"><div><p className="text-sm font-semibold">{override.provider_profiles?.profiles?.full_name ?? override.provider_profiles?.profiles?.email ?? "Prestador"}</p><p className="text-xs text-muted-foreground">Taxa personalizada</p></div><div className="flex items-center gap-3"><span className="font-bold text-primary">{Number(override.service_fee_pct).toFixed(2)}%</span><button onClick={() => removeOverride(override.provider_id)} title="Remover taxa personalizada" className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10 flex items-center justify-center"><Trash2 className="h-4 w-4" /></button></div></div>)}</div>
         </section>
