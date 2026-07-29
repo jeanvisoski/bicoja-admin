@@ -162,9 +162,24 @@ export function Wallets() {
   }
 
   async function reviewPayout(payout: PayoutRequest, status: "aprovado" | "pago" | "rejeitado") {
-    const reference = status === "pago" ? window.prompt("Informe o identificador/comprovante da transferencia Pix:") : null;
-    if (status === "pago" && !reference) return;
-    const { error } = await supabase.rpc("review_payout_request", { p_request_id: payout.id, p_status: status, p_note: null, p_reference: reference });
+    const actionLabel = status === "aprovado" ? "aprovação" : status === "pago" ? "pagamento" : "recusa";
+    const note = window.prompt(`Registre a observação da ${actionLabel} (mínimo de 10 caracteres):`);
+    if (note === null) return;
+    if (note.trim().length < 10) {
+      toast.error("Descreva a decisão com pelo menos 10 caracteres.");
+      return;
+    }
+    const reference = status === "pago" ? window.prompt("Informe o ID E2E da transferência Pix ou identificador do comprovante:") : null;
+    if (status === "pago" && (!reference || reference.trim().length < 6)) {
+      toast.error("Informe o identificador da transferência ou comprovante.");
+      return;
+    }
+    const { error } = await supabase.rpc("review_payout_request", {
+      p_request_id: payout.id,
+      p_status: status,
+      p_note: note.trim(),
+      p_reference: reference?.trim() ?? null,
+    });
     if (error) return toast.error(error.message);
     toast.success(status === "pago" ? "Saque marcado como pago." : status === "rejeitado" ? "Saque rejeitado e saldo devolvido." : "Saque aprovado para transferencia.");
     queryClient.invalidateQueries({ queryKey: ["admin-payout-requests"] });
@@ -271,7 +286,7 @@ export function Wallets() {
         )}
       </section>
       <section className="mb-6 rounded-2xl border border-border bg-card p-5"><h2 className="font-bold">Chaves Pix aguardando validacao</h2>{destinations.length === 0 ? <p className="text-sm text-muted-foreground mt-3">Nenhuma chave pendente.</p> : <div className="space-y-3 mt-4">{destinations.map((destination) => <div key={destination.provider_id} className="rounded-xl border border-border p-3 flex items-center gap-3"><div className="flex-1"><p className="text-sm font-semibold">{destination.full_name}</p><p className="text-xs text-muted-foreground">{destination.pix_key_type}: {destination.pix_key} · {destination.holder_name}</p></div><button onClick={() => verifyDestination(destination.provider_id, "verificado")} className="h-8 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold">Validar</button><button onClick={() => verifyDestination(destination.provider_id, "desativado")} className="h-8 px-3 rounded-lg border border-destructive text-destructive text-xs font-semibold">Recusar</button></div>)}</div>}</section>
-      <section className="mb-6 rounded-2xl border border-border bg-card p-5"><h2 className="font-bold">Solicitacoes de saque</h2><p className="text-xs text-muted-foreground mt-1 mb-4">Valide a chave Pix, transfira fora da plataforma e registre o comprovante.</p>{payouts.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum saque aguardando analise.</p> : <div className="space-y-3">{payouts.map((payout) => <div key={payout.id} className="rounded-xl border border-border p-3 flex items-center gap-3"><div className="flex-1"><p className="text-sm font-semibold">{payout.profiles?.full_name ?? "Prestador"} · R$ {Number(payout.amount).toFixed(2)}</p><p className="text-xs text-muted-foreground">Pix: {payout.destination_snapshot?.pix_key ?? "—"} · {payout.destination_snapshot?.holder_name ?? "—"}</p></div><div className="flex gap-2">{payout.status === "solicitado" && <><button onClick={() => reviewPayout(payout, "aprovado")} className="h-8 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold">Aprovar</button><button onClick={() => reviewPayout(payout, "rejeitado")} className="h-8 px-3 rounded-lg border border-destructive text-destructive text-xs font-semibold">Rejeitar</button></>}{payout.status === "aprovado" && <button onClick={() => reviewPayout(payout, "pago")} className="h-8 px-3 rounded-lg bg-trust text-primary-foreground text-xs font-semibold">Marcar pago</button>}</div></div>)}</div>}</section>
+      <section className="mb-6 rounded-2xl border border-border bg-card p-5"><h2 className="font-bold">Solicitacoes de saque</h2><p className="text-xs text-muted-foreground mt-1 mb-4">Valide a chave Pix, transfira fora da plataforma e registre a decisão. Para marcar como pago, o ID E2E ou identificador do comprovante é obrigatório.</p>{payouts.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum saque aguardando analise.</p> : <div className="space-y-3">{payouts.map((payout) => <div key={payout.id} className="rounded-xl border border-border p-3 flex items-center gap-3"><div className="flex-1"><p className="text-sm font-semibold">{payout.profiles?.full_name ?? "Prestador"} · R$ {Number(payout.amount).toFixed(2)}</p><p className="text-xs text-muted-foreground">Pix: {payout.destination_snapshot?.pix_key ?? "—"} · {payout.destination_snapshot?.holder_name ?? "—"}</p></div><div className="flex gap-2">{payout.status === "solicitado" && <><button onClick={() => reviewPayout(payout, "aprovado")} className="h-8 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold">Aprovar</button><button onClick={() => reviewPayout(payout, "rejeitado")} className="h-8 px-3 rounded-lg border border-destructive text-destructive text-xs font-semibold">Rejeitar</button></>}{payout.status === "aprovado" && <button onClick={() => reviewPayout(payout, "pago")} className="h-8 px-3 rounded-lg bg-trust text-primary-foreground text-xs font-semibold">Marcar pago</button>}</div></div>)}</div>}</section>
       {isLoading && <p className="text-sm text-muted-foreground">Carregando carteira...</p>}
       {!isLoading && transactions.length === 0 && <div className="rounded-2xl border border-border bg-card p-8 text-center text-muted-foreground"><WalletCards className="h-9 w-9 mx-auto mb-3" />Nenhuma movimentação.</div>}
       <p className="text-xs text-muted-foreground mb-2">
